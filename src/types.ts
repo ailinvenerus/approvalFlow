@@ -52,6 +52,10 @@ export class Expense {
     return this.approvalHistory;
   }
 
+  setSubmitterUid(uid: number) {
+    this.submitterUid = uid;
+  }
+
   // Setters
   setStatus(status: Expense['status']) {
     this.status = status;
