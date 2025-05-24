@@ -1,5 +1,6 @@
 import { readFile } from 'fs/promises';
 import path, { dirname } from 'path';
+import { env } from 'process';
 import { fileURLToPath } from 'url';
 import { System } from './approvalFlow.js';
 import { Employee } from './types.js';
@@ -13,11 +14,16 @@ const __dirname = dirname(__filename);
 // Read the tests in the 'tests' folder to see how to use the System class.
 
 // Create a new System instance with a threshold of 1000 (as example). This value can be changed.
-const system = new System(1000);
+//TODO: validate the threshold value and its existence in the environment variables. Make these validations inside the System class.
+const threshold = env.THRESHOLD ? Number(env.THRESHOLD) : 1000;
+//TODO: do the same with the users.json file, pass in the env. Also in System class. new System(threshold, usersJsonPath);
+const system = new System(threshold);
 
 // Load employees from json file
+//TODO: load employees from the system instead of here
 await loadEmployees(system);
 
+//TODO: validate the employees data (zod) and put this function in System class
 export async function loadEmployees(system: System) {
   const employeesJson = await readFile(path.join(__dirname, '../src/input/users.json'), 'utf-8');
   const employeesData = JSON.parse(employeesJson);

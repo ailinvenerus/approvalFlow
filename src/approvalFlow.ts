@@ -5,38 +5,26 @@ export class System {
   private threshold: number;
   //TODO: make it a map
   private expenses: Expense[];
+  //TODO: make it a map
   private employees: Employee[];
 
   constructor(threshold: number) {
+    //TODO: add threshold validation here: >= 0
     this.threshold = threshold;
     this.expenses = [];
     this.employees = [];
-  }
-
-  // Getters and Setters
-  getThreshold() {
-    return this.threshold;
-  }
-
-  getExpenses() {
-    return this.expenses;
-  }
-
-  getEmployees() {
-    return this.employees;
-  }
-
-  setThreshold(threshold: number) {
-    this.threshold = threshold;
   }
 
   setEmployees(employees: Employee[]) {
     this.employees = employees;
   }
 
+  //TODO: make some of these methods private and put the public methods above them
+
   // Create a new expense
   createExpense(amount: number, submitterUid: Employee['uid']): string {
     this.validateSubmitter(submitterUid);
+    //TODO: validate amount > 0
     const expense = new Expense(randomUUID(), amount, submitterUid, 'SUBMITTED', ['SUBMITTED']);
 
     this.expenses.push(expense);
@@ -51,15 +39,16 @@ export class System {
     const manager = this.getManagerFromId(managerId);
     const newStatus = 'PENDING_MANAGER';
     expense.setStatus(newStatus);
-    expense.setNextApproverId(managerId);
-    manager.addPendingExpense(expenseId);
   }
 
   // Get the next approvers for an expense
   nextApprovers(expenseId: string): number[] {
     const expense = this.getExpense(expenseId);
     const status = expense.getStatus();
+    let submitter = this.getSubmitterFromId(expense.getSubmitterUid());
+    let managerId: number | undefined;
     switch (status) {
+      case 'SUBMITTED':
       case 'APPROVED':
       case 'REJECTED_MANAGER':
       case 'REJECTED_SENIOR_MANAGER':
@@ -69,111 +58,40 @@ export class System {
         const financeExperts = this.employees.filter((emp) => emp.getRole() === 'FINANCE_EXPERT');
         return financeExperts.map((emp) => emp.getUid());
       }
+      case 'PENDING_MANAGER':
+        submitter = this.getSubmitterFromId(expense.getSubmitterUid());
+        managerId = submitter.getManager();
+        return [managerId];
+      case 'PENDING_SENIOR_MANAGER':
+        submitter = this.getSubmitterFromId(expense.getSubmitterUid());
+        managerId = submitter.getManager();
+        const manager = this.getManagerFromId(managerId);
+        const seniorManager = manager.getManager();
+        return [seniorManager];
       default: {
-        const nextApproverId = expense.getNextApproverId();
-        if (nextApproverId) {
-          return [nextApproverId];
-        } else {
-          throw new Error('Error: no next approver found. Start the approval process first');
-        }
+        throw new Error('Error: no next approver found. Start the approval process first');
       }
     }
   }
 
-  // Approve the expense
   approve(expenseId: string, approverUid: number) {
     const expense = this.getExpense(expenseId);
-    const approver = this.getApproverFromId(approverUid);
-    if (approver.getPendingExpenses().includes(expenseId)) {
-      this.passToNextStepOfApproval(expense, approver);
+    const nextApprovers = this.nextApprovers(expenseId);
+    if (nextApprovers.includes(approverUid)) {
+      expense.setStatus(StatusService.getNextApprovalStatus(expense, this.threshold));
     } else {
-      throw new Error('Error: approver does not have this expense pending');
+      throw new Error('Error: approver is not in authorised to approve this expense');
     }
   }
-  //TODO: make private the right functions and methods
-  passToNextStepOfApproval(expense: Expense, approver: Employee) {
-    const approverRole = approver.getRole();
-    let nextStatus: Expense['status'] | undefined;
-    switch (approverRole) {
-      case 'EMPLOYEE':
-        throw new Error('Error: employee cannot approve expenses');
-      case 'MANAGER':
-        {
-          if (expense.getAmount() < this.threshold) {
-            const financeExpert = this.selectFinanceExpert();
-            //TODO: PASS expense directly instead of id
-            financeExpert.addPendingExpense(expense.getId());
-            expense.setNextApproverId(financeExpert.getUid());
-            nextStatus = 'PENDING_FINANCE_EXPERT';
-          } else {
-            const seniorManager = this.employees.find((emp) => emp.getRole() === 'SENIOR_MANAGER');
-            if (!seniorManager) {
-              throw new Error('Error: no senior manager available. Should not reach this point');
-            }
-            seniorManager.addPendingExpense(expense.getId());
-            expense.setNextApproverId(approver.getManager());
-            nextStatus = 'PENDING_SENIOR_MANAGER';
-          }
-        }
-        break;
-      case 'SENIOR_MANAGER':
-        {
-          const financeExpert = this.selectFinanceExpert();
-          financeExpert.addPendingExpense(expense.getId());
-          expense.setNextApproverId(financeExpert.getUid());
-          nextStatus = 'PENDING_FINANCE_EXPERT';
-        }
-        break;
-      case 'FINANCE_EXPERT':
-        nextStatus = 'APPROVED';
-        break;
-      default:
-        throw new Error('Error: unknown approver role');
-    }
-    expense.setStatus(nextStatus);
-    approver.removePendingExpense(expense.getId());
-  }
 
-  // Select the finance expert with the least number of pending expenses
-  selectFinanceExpert() {
-    const financeExperts = this.getFinanceExperts();
-    return financeExperts.reduce((minEmp, emp) =>
-      emp.getPendingExpenses().length < minEmp.getPendingExpenses().length ? emp : minEmp
-    );
-  }
-
-  // Reject the expense
   reject(expenseId: string, approverUid: number) {
     const expense = this.getExpense(expenseId);
-    const approver = this.getApproverFromId(approverUid);
-    if (approver.getPendingExpenses().includes(expenseId)) {
-      this.passToRejected(expense, approver);
+    const nextApprovers = this.nextApprovers(expenseId);
+    if (nextApprovers.includes(approverUid)) {
+      expense.setStatus(StatusService.getNextRejectionStatus(expense));
     } else {
-      throw new Error('Error: approver does not have this expense pending');
+      throw new Error('Error: approver is not in authorised to approve this expense');
     }
-  }
-
-  passToRejected(expense: Expense, approver: Employee) {
-    const approverRole = approver.getRole();
-    let nextStatus: Expense['status'] | undefined;
-    switch (approverRole) {
-      case 'EMPLOYEE':
-        throw new Error('Error: employee cannot approve expenses');
-      case 'MANAGER':
-        nextStatus = 'REJECTED_MANAGER';
-        break;
-      case 'SENIOR_MANAGER':
-        nextStatus = 'REJECTED_SENIOR_MANAGER';
-        break;
-      case 'FINANCE_EXPERT':
-        nextStatus = 'REJECTED_FINANCE_EXPERT';
-        break;
-      default:
-        throw new Error('Error: unknown approver role');
-    }
-    expense.setStatus(nextStatus);
-    expense.setNextApproverId();
-    approver.removePendingExpense(expense.getId());
   }
 
   // Dump the current flow of an expense
@@ -198,6 +116,7 @@ export class System {
     return this.employees.find((emp) => emp.getUid() === submitterUid);
   }
 
+  //TODO: is it duplicated under this function?
   getManagerFromId(managerId: number) {
     if (!managerId) {
       throw new Error('Error: manager employee of submitter employee not found');
@@ -239,6 +158,42 @@ export class System {
     }
     if (submitter.getRole() !== 'EMPLOYEE') {
       throw new Error('Error: only employees can submit expenses');
+    }
+  }
+}
+
+class StatusService {
+  static getNextApprovalStatus(expense: Expense, threshold: number) {
+    const status = expense.getStatus();
+    switch (status) {
+      case 'PENDING_MANAGER':
+        if (expense.getAmount() < threshold) {
+          return 'PENDING_FINANCE_EXPERT';
+        } else {
+          return 'PENDING_SENIOR_MANAGER';
+        }
+      case 'PENDING_SENIOR_MANAGER':
+        return 'PENDING_FINANCE_EXPERT';
+      case 'PENDING_FINANCE_EXPERT':
+        return 'APPROVED';
+      default:
+        throw new Error(
+          `Error: expense is in status ${status} is not in a valid state for approval`
+        );
+    }
+  }
+
+  static getNextRejectionStatus(expense: Expense) {
+    const status = expense.getStatus();
+    switch (status) {
+      case 'PENDING_MANAGER':
+        return 'REJECTED_MANAGER';
+      case 'PENDING_SENIOR_MANAGER':
+        return 'REJECTED_SENIOR_MANAGER';
+      case 'PENDING_FINANCE_EXPERT':
+        return 'REJECTED_FINANCE_EXPERT';
+      default:
+        `Error: expense is in status ${status} is not in a valid state for rejection`;
     }
   }
 }

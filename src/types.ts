@@ -6,11 +6,8 @@ export class Expense {
   private id: string;
   private amount: number;
   private submitterUid: number;
-  //TODO: add this field later!!!
-  private rejectedBy?: number;
   private status: string;
   private approvalHistory: Expense['status'][];
-  private nextApproverId?: number;
 
   constructor(
     id: string,
@@ -25,20 +22,22 @@ export class Expense {
       | 'REJECTED_MANAGER'
       | 'REJECTED_SENIOR_MANAGER'
       | 'REJECTED_FINANCE_EXPERT',
-    approvalHistory: Expense['status'][] = [],
-    nextApproverId?: number
+    approvalHistory: Expense['status'][] = []
   ) {
     this.id = id;
     this.amount = amount;
     this.submitterUid = submitterUid;
     this.status = status;
     this.approvalHistory = approvalHistory;
-    this.nextApproverId = nextApproverId;
   }
 
   // Getters
   getId() {
     return this.id;
+  }
+
+  getSubmitterUid() {
+    return this.submitterUid;
   }
 
   getAmount() {
@@ -53,18 +52,10 @@ export class Expense {
     return this.approvalHistory;
   }
 
-  getNextApproverId() {
-    return this.nextApproverId;
-  }
-
   // Setters
   setStatus(status: Expense['status']) {
     this.status = status;
     this.addToApprovalHistory(status);
-  }
-
-  setNextApproverId(nextApproverId?: number) {
-    this.nextApproverId = nextApproverId;
   }
 
   // Private methods
@@ -76,9 +67,9 @@ export class Expense {
 export class Employee {
   private uid: number;
   private email: string;
+  //TODO: should have the reference to the manager, not the id
   private manager: number;
   private role: string;
-  private pendingExpenses: string[];
 
   constructor(
     uid: number,
@@ -90,10 +81,8 @@ export class Employee {
     this.email = email;
     this.manager = manager;
     this.role = role;
-    this.pendingExpenses = [];
   }
 
-  // Getters and Setters
   getUid() {
     return this.uid;
   }
@@ -104,20 +93,5 @@ export class Employee {
 
   getRole() {
     return this.role;
-  }
-
-  getPendingExpenses() {
-    return this.pendingExpenses;
-  }
-
-  // Flow methods
-  addPendingExpense(expenseId: string) {
-    if (!this.pendingExpenses.includes(expenseId)) {
-      this.pendingExpenses.push(expenseId);
-    }
-  }
-
-  removePendingExpense(expenseId: string) {
-    this.pendingExpenses = this.pendingExpenses.filter((id) => id !== expenseId);
   }
 }
