@@ -1,0 +1,11 @@
+[
+  { "uid": 1, "email": "jof@tipalti.com", "manager": 2, "role": "EMPLOYEE" },
+  { "uid": 2, "email": "tom@tipalti.com", "manager": 5, "role": "MANAGER" },
+  { "uid": 3, "email": "nico@tipalti.com", "manager": 2, "role": "EMPLOYEE" },
+  { "uid": 4, "email": "ori@tipalti.com", "manager": 5, "role": "MANAGER" },
+  { "uid": 5, "email": "igor@tipalti.com", "manager": 5, "role": "SENIOR_MANAGER" },
+  { "uid": 6, "email": "sergey@approve.com", "manager": 7, "role": "FINANCE_EXPERT" },
+  { "uid": 7, "email": "reut@approve.com", "manager": 7, "role": "FINANCE_EXPERT" },
+  { "uid": 8, "email": "ben@approve.com", "manager": 6, "role": "FINANCE_EXPERT" },
+  { "uid": 9, "email": "susy@tipalti.com", "manager": 4, "role": "EMPLOYEE" }
+]
