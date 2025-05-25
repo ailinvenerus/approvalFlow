@@ -70,7 +70,7 @@ npm run start
 ```typescript
 import { System } from './approvalFlow.js';
 
-// Initialize system with threshold and users data
+// Initialise system with threshold and users data
 const system = new System(1000, '../src/input/users.json');
 
 // Create and submit an expense
@@ -108,7 +108,7 @@ system.dumpFlow(expenseId);
 
 - Only employees can submit expenses
 - Managers and senior managers cannot submit expenses
-- Approvers must be authorized for the current expense state
+- Approvers must be authorised for the current expense state
 - Finance experts are identified by the "financeExpert" boolean field in the input JSON:
   ```json
   {
@@ -126,5 +126,5 @@ The system uses explicit error messages for common scenarios:
 
 - Invalid threshold values
 - Missing or malformed user data
-- Unauthorized approval attempts
+- Unauthorised approval attempts
 - Invalid expense states

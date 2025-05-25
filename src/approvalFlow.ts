@@ -23,6 +23,13 @@ export class System {
   }
 
   loadEmployees(system: System, usersJsonPath: string) {
+    console.debug(`System: Loading employees from path: ${usersJsonPath}`);
+    if (!usersJsonPath) {
+      throw new Error('Error: usersJsonPath is not provided');
+    }
+    if (!usersJsonPath.endsWith('.json')) {
+      throw new Error('Error: usersJsonPath must point to a JSON file');
+    }
     const employeesJson = readFileSync(path.join(__dirname, usersJsonPath), 'utf-8');
     try {
       const employeesData = EmployeeInputSchema.array().parse(JSON.parse(employeesJson));
@@ -30,10 +37,13 @@ export class System {
         (emp) => new Employee(emp.uid, emp.email, emp.manager, emp.financeExpert)
       );
       system.setEmployees(new Map(employees.map((emp) => [emp.getUid(), emp])));
+      console.debug(`System: Loaded ${employeesData.length} employees`);
+
       const financeExpertsIds = employees
         .filter((employee) => employee.getFinanceExpert())
         .map((emp) => emp.getUid());
       system.setFinanceExpertsIds(financeExpertsIds);
+      console.debug(`System: Identified ${financeExpertsIds.length} finance experts`);
     } catch (error) {
       throw new Error('Error: input with employees is incorrect');
     }
@@ -80,6 +90,7 @@ export class System {
     const expense = this.getExpense(expenseId);
     expense.setSubmitterUid(submitterUid);
     expense.setStatus('PENDING_MANAGER');
+    console.debug(`Approval: Started for expense ${expenseId} by submitter ${submitterUid}`);
   }
 
   // Get the next approvers for an expense
@@ -87,6 +98,7 @@ export class System {
     const expense = this.getExpense(expenseId);
     const status = expense.getStatus();
     const submitter = this.employees.get(expense.getSubmitterUid());
+    console.debug(`Approval: Finding next approvers for expense ${expenseId} (status: ${status})`);
     switch (status) {
       case 'APPROVED':
       case 'REJECTED_MANAGER':
@@ -113,7 +125,12 @@ export class System {
     const expense = this.getExpense(expenseId);
     const nextApprovers = this.nextApprovers(expenseId);
     if (nextApprovers.includes(approverUid)) {
-      expense.setStatus(StatusService.getNextApprovalStatus(expense, this.threshold));
+      const oldStatus = expense.getStatus();
+      const newStatus = StatusService.getNextApprovalStatus(expense, this.threshold);
+      expense.setStatus(newStatus);
+      console.debug(
+        `Approval: Expense ${expenseId} approved by ${approverUid} (${oldStatus} -> ${newStatus})`
+      );
     } else {
       throw new Error('Error: approver is not in authorised to approve this expense');
     }
@@ -123,7 +140,12 @@ export class System {
     const expense = this.getExpense(expenseId);
     const nextApprovers = this.nextApprovers(expenseId);
     if (nextApprovers.includes(approverUid)) {
-      expense.setStatus(StatusService.getNextRejectionStatus(expense));
+      const oldStatus = expense.getStatus();
+      const newStatus = StatusService.getNextRejectionStatus(expense);
+      expense.setStatus(newStatus);
+      console.debug(
+        `Approval: Expense ${expenseId} rejected by ${approverUid} (${oldStatus} -> ${newStatus})`
+      );
     } else {
       throw new Error('Error: approver is not in authorised to reject this expense');
     }
@@ -133,7 +155,9 @@ export class System {
   dumpFlow(expenseId: string) {
     const expense = this.getExpense(expenseId);
     console.debug(
-      `Current flow for expense ${expenseId}: ${expense.getApprovalHistory().join(' -> ')}`
+      `Approval: Flow history for expense ${expenseId}: ${expense
+        .getApprovalHistory()
+        .join(' -> ')}`
     );
   }
 

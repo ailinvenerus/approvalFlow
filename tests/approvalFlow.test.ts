@@ -284,7 +284,9 @@ describe('dumpflow', () => {
     const submitterUid = 1;
     const expenseId = system.createExpense(500, submitterUid);
     system.dumpFlow(expenseId);
-    expect(consoleSpy).toHaveBeenCalledWith(`Current flow for expense ${expenseId}: SUBMITTED`);
+    expect(consoleSpy).toHaveBeenCalledWith(
+      `Approval: Flow history for expense ${expenseId}: SUBMITTED`
+    );
   });
 
   it('Should dump flow with full expense history (up to a stage) correctly', () => {
@@ -296,7 +298,7 @@ describe('dumpflow', () => {
     system.approve(expenseId, managerId);
     system.dumpFlow(expenseId);
     expect(consoleSpy).toHaveBeenCalledWith(
-      `Current flow for expense ${expenseId}: SUBMITTED -> PENDING_MANAGER -> PENDING_FINANCE_EXPERT`
+      `Approval: Flow history for expense ${expenseId}: SUBMITTED -> PENDING_MANAGER -> PENDING_FINANCE_EXPERT`
     );
   });
 
@@ -309,7 +311,7 @@ describe('dumpflow', () => {
     system.reject(expenseId, managerId);
     system.dumpFlow(expenseId);
     expect(consoleSpy).toHaveBeenCalledWith(
-      `Current flow for expense ${expenseId}: SUBMITTED -> PENDING_MANAGER -> REJECTED_MANAGER`
+      `Approval: Flow history for expense ${expenseId}: SUBMITTED -> PENDING_MANAGER -> REJECTED_MANAGER`
     );
   });
 
@@ -324,7 +326,7 @@ describe('dumpflow', () => {
     system.approve(expenseId, financeExpertId);
     system.dumpFlow(expenseId);
     expect(consoleSpy).toHaveBeenCalledWith(
-      `Current flow for expense ${expenseId}: SUBMITTED -> PENDING_MANAGER -> PENDING_FINANCE_EXPERT -> APPROVED`
+      `Approval: Flow history for expense ${expenseId}: SUBMITTED -> PENDING_MANAGER -> PENDING_FINANCE_EXPERT -> APPROVED`
     );
   });
 

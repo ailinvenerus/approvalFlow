@@ -4,7 +4,7 @@ import { System } from './approvalFlow.js';
 // This is the entry point for the Approval Flow system.
 // For setup instructions and usage examples, please refer to README.md in the project root.
 
-// Initialize system with configurable threshold and users file path
+// Initialise system with configurable threshold and users file path
 const threshold = env.THRESHOLD ? Number(env.THRESHOLD) : 1000;
 const usersFilePath = env.USERS_JSON_PATH ?? '../src/input/users.json';
 

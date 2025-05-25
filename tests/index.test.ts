@@ -49,6 +49,16 @@ describe('System - load employees and create expenses map', () => {
       'Error: input with employees is incorrect'
     );
   });
+
+  it('Missing path to employees input file throws error', () => {
+    expect(() => new System(1000, '')).toThrow('Error: usersJsonPath is not provided');
+  });
+
+  it('Path to employees input file is not a JSON file throws error', () => {
+    expect(() => new System(1000, '../tests/input/users.txt')).toThrow(
+      'Error: usersJsonPath must point to a JSON file'
+    );
+  });
 });
 
 describe('Approval flow', () => {
@@ -68,6 +78,18 @@ describe('Approval flow', () => {
     const expenseId = system.createExpense(500, submitterUid); // new status: SUBMITTED
     system.startApproval(expenseId, submitterUid); // new status: PENDING_MANAGER
     const expense = system.getExpenses().get(expenseId);
+    expect(expense.getStatus()).toBe('PENDING_MANAGER');
+    expect(expense.getApprovalHistory()).toEqual(['SUBMITTED', 'PENDING_MANAGER']);
+  });
+
+  it('Expense submitted by an employee different than the employee that starts approval process', () => {
+    const system = new System(1000, usersJsonPath);
+    const submitterUid = 1;
+    const expenseId = system.createExpense(500, submitterUid); // new status: SUBMITTED
+    const startedByUid = 2;
+    system.startApproval(expenseId, startedByUid); // new status: PENDING_MANAGER
+    const expense = system.getExpenses().get(expenseId);
+    expect(expense.getSubmitterUid()).toBe(startedByUid);
     expect(expense.getStatus()).toBe('PENDING_MANAGER');
     expect(expense.getApprovalHistory()).toEqual(['SUBMITTED', 'PENDING_MANAGER']);
   });
