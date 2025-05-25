@@ -1,195 +1,278 @@
 import { describe } from 'node:test';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { System } from '../src/approvalFlow.js';
-import { loadEmployees } from '../src/index.js';
 
-describe('System', () => {
-  it('Should initialise with correct values', () => {
-    const system = new System(1000);
-    expect(system.getThreshold()).toBe(1000);
-    expect(system.getExpenses()).toEqual([]);
-    expect(system.getEmployees()).toEqual([]);
+const usersJsonPath = '../tests/input/users.json';
+
+describe('createExpense', () => {
+  it('Should create an expense correctly', () => {
+    const system = new System(1000, usersJsonPath);
+    const expenseId = system.createExpense(500, 1);
+    const expense = system.getExpenses().get(expenseId);
+    expect(expenseId).toBeDefined();
+    expect(expense).toBeDefined();
+    expect(expense.getAmount()).toBe(500);
+    expect(expense.getStatus()).toBe('SUBMITTED');
   });
 
-  it('Should set threshold correctly', () => {
-    const system = new System(1000);
-    system.setThreshold(2000);
-    expect(system.getThreshold()).toBe(2000);
+  it('Should throw an error when submitter does not exist', () => {
+    const system = new System(1000, usersJsonPath);
+    const submitterUid = 999;
+    expect(() => system.createExpense(500, submitterUid)).toThrow(
+      `Error: submitter uid ${submitterUid} not found`
+    );
+  });
+
+  it('Should throw an error when submitter is a manager', () => {
+    const system = new System(1000, usersJsonPath);
+    const submitterUid = 2;
+    expect(() => system.createExpense(500, submitterUid)).toThrow(
+      'Error: only employees can submit expenses'
+    );
+  });
+
+  it('Should throw an error when submitter is a senior manager', () => {
+    const system = new System(1000, usersJsonPath);
+    const submitterUid = 5;
+    expect(() => system.createExpense(500, submitterUid)).toThrow(
+      'Error: only employees can submit expenses'
+    );
+  });
+
+  it('Should throw an error when creating an expense with amount < 0', () => {
+    const system = new System(1000, usersJsonPath);
+    expect(() => system.createExpense(-100, 1)).toThrow(
+      'Error: expense amount must be greater than 0'
+    );
+  });
+
+  it('Should throw an error when creating an expense with amount 0', () => {
+    const system = new System(1000, usersJsonPath);
+    expect(() => system.createExpense(0, 1)).toThrow(
+      'Error: expense amount must be greater than 0'
+    );
   });
 });
 
-describe('Getter and validation', () => {
-  it('Should fail when submitter is not found', async () => {
-    const system = new System(1000);
-    await loadEmployees(system);
-    expect(() => system.validateSubmitter(999)).toThrow('Error: submitter employee not found');
-  });
-
-  it('Should fail when submitter is not an employee', async () => {
-    const system = new System(1000);
-    await loadEmployees(system);
-    expect(() => system.validateSubmitter(2)).toThrow('Error: only employees can submit expenses');
-  });
-
-  it('Should fail when expense is not found', async () => {
-    const system = new System(1000);
-    expect(() => system.getExpense('non-existent-id')).toThrow('Error: expense not found');
-  });
-
-  it('Should fail when approver is not found', async () => {
-    const system = new System(1000);
-    expect(() => system.getApproverFromId(999)).toThrow('Error: approver employee not found');
-  });
-
-  it('Should fail when no finance experts available', () => {
-    const system = new System(1000);
-    expect(() => system.getFinanceExperts()).toThrow('No finance experts available');
-  });
-
-  it('Should select finance expert with least pending expenses', async () => {
-    const system = new System(1000);
-    await loadEmployees(system);
-    const expert = system.selectFinanceExpert();
-    expect(expert.getRole()).toBe('FINANCE_EXPERT');
-    expect(expert.getPendingExpenses()).toHaveLength(0);
-  });
-
-  it('Should select finance expert with least pending expenses when multiple have more', async () => {
-    const system = new System(1000);
-    await loadEmployees(system);
-    const financeExpert1 = system.getFinanceExperts().find((expert) => expert.getUid() === 6);
-    const financeExpert2 = system.getFinanceExperts().find((expert) => expert.getUid() === 7);
-    financeExpert1.addPendingExpense('expense-1');
-    financeExpert1.addPendingExpense('expense-2');
-    financeExpert2.addPendingExpense('expense-3');
-    const expert = system.selectFinanceExpert();
-    expect(expert.getUid()).toBe(8);
-    expect(expert.getRole()).toBe('FINANCE_EXPERT');
-    expect(expert.getPendingExpenses()).toHaveLength(0);
-  });
-
-  it('Should get next approvers for pending finance expert state', async () => {
-    const system = new System(1000);
-    await loadEmployees(system);
+describe('startApproval', () => {
+  it('Should start approval process for an expense', () => {
+    const system = new System(1000, usersJsonPath);
     const submitterUid = 1;
     const expenseId = system.createExpense(500, submitterUid);
     system.startApproval(expenseId, submitterUid);
-    const managerId = system.getSubmitterFromId(submitterUid).getManager();
-    system.approve(expenseId, managerId);
-    const nextApprovers = system.nextApprovers(expenseId);
-    expect(nextApprovers).toContain(6);
-    expect(nextApprovers).toContain(7);
-    expect(nextApprovers).toContain(8);
+    const expense = system.getExpenses().get(expenseId);
+    expect(expense).toBeDefined();
+    expect(expense.getStatus()).toBe('PENDING_MANAGER');
+    expect(expense.getSubmitterUid()).toBe(submitterUid);
+    expect(expense.getApprovalHistory()).toEqual(['SUBMITTED', 'PENDING_MANAGER']);
   });
 
-  it('Should get empty next approvers for final states', async () => {
-    const system = new System(1000);
-    await loadEmployees(system);
+  it('Should throw error if expense does ont exist', () => {
+    const system = new System(1000, usersJsonPath);
     const submitterUid = 1;
-    const expenseId = system.createExpense(500, submitterUid);
-    system.startApproval(expenseId, submitterUid);
-    const managerId = system.getSubmitterFromId(submitterUid).getManager();
-    system.reject(expenseId, managerId);
-    const nextApprovers = system.nextApprovers(expenseId);
-    expect(nextApprovers).toEqual([]);
+    const expenseId = 'non-existent-id';
+    expect(() => system.startApproval(expenseId, submitterUid)).toThrow(
+      `Error: expense with id ${expenseId} not found`
+    );
   });
+});
 
-  it('Should get manager as next approvers after start approval', async () => {
-    const system = new System(1000);
-    await loadEmployees(system);
+describe('nextApprovers', () => {
+  it('Should throw error if an expense has status `SUBMITTED`', () => {
+    const system = new System(1000, usersJsonPath);
     const submitterUid = 1;
-    const expenseId = system.createExpense(500, submitterUid);
-    system.startApproval(expenseId, submitterUid);
-    const nextApprovers = system.nextApprovers(expenseId);
-    expect(nextApprovers).toEqual([2]);
-  });
-
-  it('Should fail when trying to approve without starting approval process', async () => {
-    const system = new System(1000);
-    await loadEmployees(system);
-    const submitterUid = 1;
-    const expenseId = system.createExpense(500, submitterUid);
+    const expenseId = system.createExpense(500, submitterUid); // new status: SUBMITTED
     expect(() => system.nextApprovers(expenseId)).toThrow(
       'Error: no next approver found. Start the approval process first'
     );
   });
 
-  it('Should fail when trying to approve an expense not pending for approver', async () => {
-    const system = new System(1000);
-    await loadEmployees(system);
+  it('Should return correct next approvers for an expense with status `PENDING_MANAGER`', () => {
+    const system = new System(1000, usersJsonPath);
     const submitterUid = 1;
-    const expenseId = system.createExpense(500, submitterUid);
-    system.startApproval(expenseId, submitterUid);
-    expect(() => system.approve(expenseId, 6)).toThrow(
-      'Error: approver does not have this expense pending'
-    );
+    const submitter = system.getEmployees().get(submitterUid);
+    const expenseId = system.createExpense(500, submitterUid); // new status: SUBMITTED
+    system.startApproval(expenseId, submitterUid); // new status: PENDING_MANAGER
+    const nextApprovers = system.nextApprovers(expenseId);
+    const manager = submitter.getManager();
+    const expectedApprovers = [manager];
+    expect(nextApprovers).toEqual(expectedApprovers);
   });
 
-  it('Should fail when trying to reject an expense not pending for approver', async () => {
-    const system = new System(1000);
-    await loadEmployees(system);
+  it('Should return correct next approvers for an expense with status `PENDING_SENIOR_MANAGER`', () => {
+    const system = new System(1000, usersJsonPath);
     const submitterUid = 1;
-    const expenseId = system.createExpense(500, submitterUid);
-    system.startApproval(expenseId, submitterUid);
-    expect(() => system.reject(expenseId, 6)).toThrow(
-      'Error: approver does not have this expense pending'
-    );
+    const employees = system.getEmployees();
+    const submitter = employees.get(submitterUid);
+    const expenseId = system.createExpense(2000, submitterUid); // new status: SUBMITTED
+    system.startApproval(expenseId, submitterUid); // new status: PENDING_MANAGER
+    const manager = submitter.getManager();
+    system.approve(expenseId, manager); // new status: PENDING_SENIOR_MANAGER
+    const seniorManager = employees.get(manager).getManager();
+    const nextApprovers = system.nextApprovers(expenseId);
+    const expectedApprovers = [seniorManager];
+    expect(nextApprovers).toEqual(expectedApprovers);
   });
 
-  it('Should fail when employee tries to pass an expense to the next step of approval', async () => {
-    const system = new System(1000);
-    await loadEmployees(system);
+  it('Should return correct next approvers for an expense with status `PENDING_FINANCE_EXPERT`', () => {
+    const system = new System(1000, usersJsonPath);
     const submitterUid = 1;
-    const submitter = system.getSubmitterFromId(submitterUid);
-    const expenseId = system.createExpense(500, submitterUid);
-    const expense = system.getExpense(expenseId);
-    expect(() => system.passToNextStepOfApproval(expense, submitter)).toThrow(
-      'Error: employee cannot approve expenses'
-    );
+    const submitter = system.getEmployees().get(submitterUid);
+    const expenseId = system.createExpense(500, submitterUid); // new status: SUBMITTED
+    system.startApproval(expenseId, submitterUid); // new status: PENDING_MANAGER
+    const manager = submitter.getManager();
+    system.approve(expenseId, manager); // new status: PENDING_FINANCE_EXPERT
+    const nextApprovers = system.nextApprovers(expenseId);
+    const expectedApprovers = system.getFinanceExpertSIds();
+    expect(nextApprovers).toEqual(expectedApprovers);
   });
 
-  it('Should fail when employee tries to pass an expense to rejected', async () => {
-    const system = new System(1000);
-    await loadEmployees(system);
+  it('Should return empty list of next approvers for an expense with status `APPROVED`', () => {
+    const system = new System(1000, usersJsonPath);
     const submitterUid = 1;
-    const submitter = system.getSubmitterFromId(submitterUid);
+    const submitter = system.getEmployees().get(submitterUid);
+    const expenseId = system.createExpense(500, submitterUid); // new status: SUBMITTED
+    system.startApproval(expenseId, submitterUid); // new status: PENDING_MANAGER
+    const manager = submitter.getManager();
+    system.approve(expenseId, manager); // new status: PENDING_FINANCE_EXPERT
+    system.approve(expenseId, 6); // new status: APPROVED
+    const nextApprovers = system.nextApprovers(expenseId);
+    expect(nextApprovers).toHaveLength(0);
+  });
+
+  it('Should return empty list of next approvers for an expense with status `REJECTED_MANAGER`', () => {
+    const system = new System(1000, usersJsonPath);
+    const submitterUid = 1;
+    const submitter = system.getEmployees().get(submitterUid);
     const expenseId = system.createExpense(500, submitterUid);
-    const expense = system.getExpense(expenseId);
-    expect(() => system.passToRejected(expense, submitter)).toThrow(
-      'Error: employee cannot approve expenses'
-    );
+    system.startApproval(expenseId, submitterUid); // new status: PENDING_MANAGER
+    const manager = submitter.getManager();
+    system.reject(expenseId, manager); // new status: REJECTED_MANAGER
+    const nextApprovers = system.nextApprovers(expenseId);
+    expect(nextApprovers).toHaveLength(0);
   });
 
-  it('Should fail when trying to get an unexisting manager', async () => {
-    const system = new System(1000);
-    await loadEmployees(system);
-    expect(() => system.getManagerFromId(undefined)).toThrow(
-      'Error: manager employee of submitter employee not found'
-    );
+  it('Should return empty list of next approvers for an expense with status `REJECTED_SENIOR_MANAGER`', () => {
+    const system = new System(1000, usersJsonPath);
+    const submitterUid = 1;
+    const employees = system.getEmployees();
+    const submitter = employees.get(submitterUid);
+    const expenseId = system.createExpense(2000, submitterUid);
+    system.startApproval(expenseId, submitterUid); // new status: PENDING_MANAGER
+    const manager = submitter.getManager();
+    system.approve(expenseId, manager); // new status: PENDING_SENIOR_MANAGER
+    const seniorManager = employees.get(manager).getManager();
+    system.reject(expenseId, seniorManager); // new status: REJECTED_SENIOR_MANAGER
+    const nextApprovers = system.nextApprovers(expenseId);
+    expect(nextApprovers).toHaveLength(0);
   });
 
-  it('Should fail when trying to get an unexisting finance expert', async () => {
-    const system = new System(1000);
-    await loadEmployees(system);
-    expect(() => system.getFinanceExpertById(undefined)).toThrow(
-      'Error: finance expert employee not found'
-    );
-  });
-
-  it('Should fail when trying to get a finance expert but it is an employee', async () => {
-    const system = new System(1000);
-    await loadEmployees(system);
-    expect(() => system.getFinanceExpertById(1)).toThrow('Error: employee is not a finance expert');
+  it('Should return empty list of next approvers for an expense with status `REJECTED_FINANCE_EXPERT`', () => {
+    const system = new System(1000, usersJsonPath);
+    const submitterUid = 1;
+    const submitter = system.getEmployees().get(submitterUid);
+    const expenseId = system.createExpense(500, submitterUid);
+    system.startApproval(expenseId, submitterUid); // new status: PENDING_MANAGER
+    const manager = submitter.getManager();
+    system.approve(expenseId, manager); // new status: PENDING_FINANCE_EXPERT
+    system.reject(expenseId, 6); // new status: REJECTED_FINANCE_EXPERT
+    const nextApprovers = system.nextApprovers(expenseId);
+    expect(nextApprovers).toHaveLength(0);
   });
 });
 
-describe('System Console Output', () => {
+describe('approve', () => {
+  it('Should approve an expense and pass it to the next step', () => {
+    const system = new System(1000, usersJsonPath);
+    const submitterUid = 1;
+    const employees = system.getEmployees();
+    const submitter = employees.get(submitterUid);
+    const expenseId = system.createExpense(500, submitterUid); // new status: SUBMITTED
+    system.startApproval(expenseId, submitterUid); // new status: PENDING_MANAGER
+    const manager = submitter.getManager();
+    system.approve(expenseId, manager); // new status: PENDING_FINANCE_EXPERT
+    const expense = system.getExpenses().get(expenseId);
+    expect(expense).toBeDefined();
+    expect(expense.getStatus()).toBe('PENDING_FINANCE_EXPERT');
+    expect(expense.getApprovalHistory()).toEqual([
+      'SUBMITTED',
+      'PENDING_MANAGER',
+      'PENDING_FINANCE_EXPERT',
+    ]);
+  });
+
+  it('Should throw an error if expense does not exist', () => {
+    const system = new System(1000, usersJsonPath);
+    const approverUid = 1;
+    const expenseId = 'non-existent-id';
+    expect(() => system.approve(expenseId, approverUid)).toThrow(
+      `Error: expense with id ${expenseId} not found`
+    );
+  });
+
+  it('Should throw an error if approver is not in next approvers list', () => {
+    const system = new System(1000, usersJsonPath);
+    const submitterUid = 1;
+    const expenseId = system.createExpense(500, submitterUid); // new status: SUBMITTED
+    system.startApproval(expenseId, submitterUid); // new status: PENDING_MANAGER
+    const nextApprovers = system.nextApprovers(expenseId);
+    const notCorrectManagerUid = 6;
+    expect(nextApprovers).not.toContain(notCorrectManagerUid);
+    expect(() => system.approve(expenseId, notCorrectManagerUid)).toThrow(
+      'Error: approver is not in authorised to approve this expense'
+    );
+  });
+});
+
+describe('reject', () => {
+  it('Should reject an expense and pass it to the next step', () => {
+    const system = new System(1000, usersJsonPath);
+    const submitterUid = 1;
+    const employees = system.getEmployees();
+    const submitter = employees.get(submitterUid);
+    const expenseId = system.createExpense(500, submitterUid); // new status: SUBMITTED
+    system.startApproval(expenseId, submitterUid); // new status: PENDING_MANAGER
+    const manager = submitter.getManager();
+    system.reject(expenseId, manager); // new status: REJECTED_MANAGER
+    const expense = system.getExpenses().get(expenseId);
+    expect(expense).toBeDefined();
+    expect(expense.getStatus()).toBe('REJECTED_MANAGER');
+    expect(expense.getApprovalHistory()).toEqual([
+      'SUBMITTED',
+      'PENDING_MANAGER',
+      'REJECTED_MANAGER',
+    ]);
+  });
+
+  it('Should throw an error if expense does not exist', () => {
+    const system = new System(1000, usersJsonPath);
+    const approverUid = 1;
+    const expenseId = 'non-existent-id';
+    expect(() => system.reject(expenseId, approverUid)).toThrow(
+      `Error: expense with id ${expenseId} not found`
+    );
+  });
+
+  it('Should throw an error if approver is not in next approvers list', () => {
+    const system = new System(1000, usersJsonPath);
+    const submitterUid = 1;
+    const expenseId = system.createExpense(500, submitterUid); // new status: SUBMITTED
+    system.startApproval(expenseId, submitterUid); // new status: PENDING_MANAGER
+    const nextApprovers = system.nextApprovers(expenseId);
+    const notCorrectManagerUid = 6;
+    expect(nextApprovers).not.toContain(notCorrectManagerUid);
+    expect(() => system.reject(expenseId, notCorrectManagerUid)).toThrow(
+      'Error: approver is not in authorised to reject this expense'
+    );
+  });
+});
+
+describe('dumpflow', () => {
   let system: System;
   let consoleSpy: any;
 
   beforeEach(async () => {
-    system = new System(1000);
-    await loadEmployees(system);
+    system = new System(1000, usersJsonPath);
     consoleSpy = vi.spyOn(console, 'debug').mockImplementation(() => {});
   });
 
@@ -201,18 +284,17 @@ describe('System Console Output', () => {
     const submitterUid = 1;
     const expenseId = system.createExpense(500, submitterUid);
     system.dumpFlow(expenseId);
-
     expect(consoleSpy).toHaveBeenCalledWith(`Current flow for expense ${expenseId}: SUBMITTED`);
   });
 
-  it('Should dump flow with full expense history correctly', () => {
+  it('Should dump flow with full expense history (up to a stage) correctly', () => {
     const submitterUid = 1;
     const expenseId = system.createExpense(500, submitterUid);
+    const employees = system.getEmployees();
     system.startApproval(expenseId, submitterUid);
-    const managerId = system.getSubmitterFromId(submitterUid).getManager();
+    const managerId = employees.get(submitterUid).getManager();
     system.approve(expenseId, managerId);
     system.dumpFlow(expenseId);
-
     expect(consoleSpy).toHaveBeenCalledWith(
       `Current flow for expense ${expenseId}: SUBMITTED -> PENDING_MANAGER -> PENDING_FINANCE_EXPERT`
     );
@@ -221,11 +303,11 @@ describe('System Console Output', () => {
   it('Should dump flow for rejected expense correctly', () => {
     const submitterUid = 1;
     const expenseId = system.createExpense(500, submitterUid);
+    const employees = system.getEmployees();
     system.startApproval(expenseId, submitterUid);
-    const managerId = system.getSubmitterFromId(submitterUid).getManager();
+    const managerId = employees.get(submitterUid).getManager();
     system.reject(expenseId, managerId);
     system.dumpFlow(expenseId);
-
     expect(consoleSpy).toHaveBeenCalledWith(
       `Current flow for expense ${expenseId}: SUBMITTED -> PENDING_MANAGER -> REJECTED_MANAGER`
     );
@@ -234,15 +316,22 @@ describe('System Console Output', () => {
   it('Should dump flow for approved expense correctly', () => {
     const submitterUid = 1;
     const expenseId = system.createExpense(500, submitterUid);
+    const employees = system.getEmployees();
     system.startApproval(expenseId, submitterUid);
-    const managerId = system.getSubmitterFromId(submitterUid).getManager();
+    const managerId = employees.get(submitterUid).getManager();
     system.approve(expenseId, managerId);
-    // Approve by finance expert
-    system.approve(expenseId, 6);
+    const financeExpertId = 6;
+    system.approve(expenseId, financeExpertId);
     system.dumpFlow(expenseId);
-
     expect(consoleSpy).toHaveBeenCalledWith(
       `Current flow for expense ${expenseId}: SUBMITTED -> PENDING_MANAGER -> PENDING_FINANCE_EXPERT -> APPROVED`
+    );
+  });
+
+  it('Should throw an error if expense does not exist', () => {
+    const expenseId = 'non-existent-id';
+    expect(() => system.dumpFlow(expenseId)).toThrow(
+      `Error: expense with id ${expenseId} not found`
     );
   });
 });

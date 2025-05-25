@@ -88,7 +88,6 @@ export class System {
     const status = expense.getStatus();
     const submitter = this.employees.get(expense.getSubmitterUid());
     switch (status) {
-      case 'SUBMITTED':
       case 'APPROVED':
       case 'REJECTED_MANAGER':
       case 'REJECTED_SENIOR_MANAGER':
@@ -103,6 +102,7 @@ export class System {
       case 'PENDING_SENIOR_MANAGER':
         const manager = this.employees.get(submitter.getManager());
         return [manager.getManager()];
+      case 'SUBMITTED':
       default: {
         throw new Error('Error: no next approver found. Start the approval process first');
       }
@@ -140,7 +140,7 @@ export class System {
   private getExpense(expenseId: string) {
     const expense = this.expenses.get(expenseId);
     if (!expense) {
-      throw new Error('Error: expense not found');
+      throw new Error(`Error: expense with id ${expenseId} not found`);
     }
     return expense;
   }
@@ -172,7 +172,7 @@ class StatusService {
         return 'PENDING_FINANCE_EXPERT';
       case 'PENDING_FINANCE_EXPERT':
         return 'APPROVED';
-      default:
+      default: // should not reach this point
         throw new Error(
           `Error: expense is in status ${status} is not in a valid state for approval`
         );
@@ -188,8 +188,10 @@ class StatusService {
         return 'REJECTED_SENIOR_MANAGER';
       case 'PENDING_FINANCE_EXPERT':
         return 'REJECTED_FINANCE_EXPERT';
-      default:
-        `Error: expense is in status ${status} is not in a valid state for rejection`;
+      default: // should not reach this point
+        throw new Error(
+          `Error: expense is in status ${status} is not in a valid state for rejection`
+        );
     }
   }
 }
