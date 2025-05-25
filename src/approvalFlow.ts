@@ -1,32 +1,78 @@
 import { randomUUID } from 'crypto';
-import { Employee, Expense } from './types.js';
+import { readFileSync } from 'fs';
+import path, { dirname } from 'path';
+import { fileURLToPath } from 'url';
+import { Employee, EmployeeInputSchema, Expense } from './types.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 export class System {
   private threshold: number;
   private expenses: Map<string, Expense>;
   private employees: Map<number, Employee>;
-  //TODO: populate when creating employees
   private financeExpertsIds: number[] = [];
 
-  constructor(threshold: number) {
-    //TODO: add threshold validation here: >= 0
+  constructor(threshold: number, usersJsonPath: string) {
+    if (threshold < 0) {
+      throw new Error('Error: threshold must be a positive number');
+    }
     this.threshold = threshold;
     this.expenses = new Map<string, Expense>();
-    this.employees = new Map<number, Employee>();
+    this.loadEmployees(this, usersJsonPath);
   }
 
-  setEmployees(employees: Map<number, Employee>) {
+  loadEmployees(system: System, usersJsonPath: string) {
+    const employeesJson = readFileSync(path.join(__dirname, usersJsonPath), 'utf-8');
+    try {
+      const employeesData = EmployeeInputSchema.array().parse(JSON.parse(employeesJson));
+      const employees = employeesData.map(
+        (emp) => new Employee(emp.uid, emp.email, emp.manager, emp.financeExpert)
+      );
+      system.setEmployees(new Map(employees.map((emp) => [emp.getUid(), emp])));
+      const financeExpertsIds = employees
+        .filter((employee) => employee.getFinanceExpert())
+        .map((emp) => emp.getUid());
+      system.setFinanceExpertsIds(financeExpertsIds);
+    } catch (error) {
+      throw new Error('Error: input with employees is incorrect');
+    }
+  }
+
+  getThreshold() {
+    return this.threshold;
+  }
+
+  getExpenses() {
+    return this.expenses;
+  }
+
+  getEmployees() {
+    return this.employees;
+  }
+
+  getFinanceExpertSIds() {
+    return this.financeExpertsIds;
+  }
+
+  private setEmployees(employees: Map<number, Employee>) {
     this.employees = employees;
+  }
+
+  private setFinanceExpertsIds(financeExperts: number[]) {
+    this.financeExpertsIds = financeExperts;
   }
 
   // Create a new expense
   createExpense(amount: number, submitterUid: Employee['uid']): string {
     this.validateSubmitter(submitterUid);
-    //TODO: validate amount > 0
-    const expense = new Expense(randomUUID(), amount, undefined, 'SUBMITTED', ['SUBMITTED']);
-
-    this.expenses.set(expense.getId(), expense);
-    return expense.getId();
+    if (amount > 0) {
+      const expense = new Expense(randomUUID(), amount, undefined, 'SUBMITTED', ['SUBMITTED']);
+      this.expenses.set(expense.getId(), expense);
+      return expense.getId();
+    } else {
+      throw new Error('Error: expense amount must be greater than 0');
+    }
   }
 
   // Start the approval process
@@ -49,7 +95,8 @@ export class System {
       case 'REJECTED_FINANCE_EXPERT':
         return [];
       case 'PENDING_FINANCE_EXPERT': {
-        return this.financeExpertsIds;
+        const financeExperts = this.financeExpertsIds;
+        return financeExperts.filter((expertId) => expertId !== submitter.getUid());
       }
       case 'PENDING_MANAGER':
         return [submitter.getManager()];
@@ -78,7 +125,7 @@ export class System {
     if (nextApprovers.includes(approverUid)) {
       expense.setStatus(StatusService.getNextRejectionStatus(expense));
     } else {
-      throw new Error('Error: approver is not in authorised to approve this expense');
+      throw new Error('Error: approver is not in authorised to reject this expense');
     }
   }
 
@@ -101,9 +148,11 @@ export class System {
   private validateSubmitter(submitterUid: number) {
     const submitter = this.employees.get(submitterUid);
     if (!submitter) {
-      throw new Error('Error: submitter employee not found');
+      throw new Error(`Error: submitter uid ${submitterUid} not found`);
     }
-    if (submitter.getRole() !== 'EMPLOYEE') {
+    const managerUid = submitter.getManager();
+    const seniorManagerUId = this.employees.get(managerUid).getManager();
+    if (submitterUid === managerUid || managerUid === seniorManagerUId) {
       throw new Error('Error: only employees can submit expenses');
     }
   }
@@ -114,7 +163,7 @@ class StatusService {
     const status = expense.getStatus();
     switch (status) {
       case 'PENDING_MANAGER':
-        if (expense.getAmount() < threshold) {
+        if (expense.getAmount() <= threshold) {
           return 'PENDING_FINANCE_EXPERT';
         } else {
           return 'PENDING_SENIOR_MANAGER';

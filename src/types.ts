@@ -1,6 +1,11 @@
-export interface UserJson {
-  Employees: Employee[];
-}
+import { boolean, number, object, string } from 'zod';
+
+export const EmployeeInputSchema = object({
+  uid: number().int().positive(),
+  email: string(),
+  manager: number().int().positive(),
+  financeExpert: boolean().optional().default(false),
+});
 
 export class Expense {
   private id: string;
@@ -12,7 +17,7 @@ export class Expense {
   constructor(
     id: string,
     amount: number,
-    submitterUid: number,
+    submitterUid: number | undefined,
     status:
       | 'SUBMITTED'
       | 'PENDING_MANAGER'
@@ -31,7 +36,6 @@ export class Expense {
     this.approvalHistory = approvalHistory;
   }
 
-  // Getters
   getId() {
     return this.id;
   }
@@ -56,13 +60,11 @@ export class Expense {
     this.submitterUid = uid;
   }
 
-  // Setters
   setStatus(status: Expense['status']) {
     this.status = status;
     this.addToApprovalHistory(status);
   }
 
-  // Private methods
   private addToApprovalHistory(status: Expense['status']) {
     this.approvalHistory.push(status);
   }
@@ -71,31 +73,29 @@ export class Expense {
 export class Employee {
   private uid: number;
   private email: string;
-  //TODO: should have the reference to the manager, not the id
   private manager: number;
-  private role: string;
+  private financeExpert: boolean = false;
 
-  constructor(
-    uid: number,
-    email: string,
-    manager: number,
-    role: 'EMPLOYEE' | 'MANAGER' | 'SENIOR_MANAGER' | 'FINANCE_EXPERT'
-  ) {
+  constructor(uid: number, email: string, manager: number, financeExpert: boolean = false) {
     this.uid = uid;
     this.email = email;
     this.manager = manager;
-    this.role = role;
+    this.financeExpert = financeExpert;
   }
 
   getUid() {
     return this.uid;
   }
 
+  getEmail() {
+    return this.email;
+  }
+
   getManager() {
     return this.manager;
   }
 
-  getRole() {
-    return this.role;
+  getFinanceExpert() {
+    return this.financeExpert;
   }
 }
