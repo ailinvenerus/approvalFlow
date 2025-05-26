@@ -7,7 +7,7 @@ const usersJsonPath = '../tests/input/users.json';
 describe('createExpense', () => {
   it('Should create an expense correctly', () => {
     const system = new System(1000, usersJsonPath);
-    const expenseId = system.createExpense(500, 1);
+    const expenseId = system.createExpense(500);
     const expense = system.getExpenses().get(expenseId);
     expect(expenseId).toBeDefined();
     expect(expense).toBeDefined();
@@ -18,7 +18,8 @@ describe('createExpense', () => {
   it('Should throw an error when submitter does not exist', () => {
     const system = new System(1000, usersJsonPath);
     const submitterUid = 999;
-    expect(() => system.createExpense(500, submitterUid)).toThrow(
+    const expenseId = system.createExpense(500);
+    expect(() => system.startApproval(expenseId, 999)).toThrow(
       `Error: submitter uid ${submitterUid} not found`
     );
   });
@@ -26,7 +27,8 @@ describe('createExpense', () => {
   it('Should throw an error when submitter is a manager', () => {
     const system = new System(1000, usersJsonPath);
     const submitterUid = 2;
-    expect(() => system.createExpense(500, submitterUid)).toThrow(
+    const expenseId = system.createExpense(500);
+    expect(() => system.startApproval(expenseId, submitterUid)).toThrow(
       'Error: only employees can submit expenses'
     );
   });
@@ -34,23 +36,22 @@ describe('createExpense', () => {
   it('Should throw an error when submitter is a senior manager', () => {
     const system = new System(1000, usersJsonPath);
     const submitterUid = 5;
-    expect(() => system.createExpense(500, submitterUid)).toThrow(
+    const expenseId = system.createExpense(500);
+    expect(() => system.startApproval(expenseId, submitterUid)).toThrow(
       'Error: only employees can submit expenses'
     );
   });
 
   it('Should throw an error when creating an expense with amount < 0', () => {
     const system = new System(1000, usersJsonPath);
-    expect(() => system.createExpense(-100, 1)).toThrow(
+    expect(() => system.createExpense(-100)).toThrow(
       'Error: expense amount must be greater than 0'
     );
   });
 
   it('Should throw an error when creating an expense with amount 0', () => {
     const system = new System(1000, usersJsonPath);
-    expect(() => system.createExpense(0, 1)).toThrow(
-      'Error: expense amount must be greater than 0'
-    );
+    expect(() => system.createExpense(0)).toThrow('Error: expense amount must be greater than 0');
   });
 });
 
@@ -58,7 +59,7 @@ describe('startApproval', () => {
   it('Should start approval process for an expense', () => {
     const system = new System(1000, usersJsonPath);
     const submitterUid = 1;
-    const expenseId = system.createExpense(500, submitterUid);
+    const expenseId = system.createExpense(500);
     system.startApproval(expenseId, submitterUid);
     const expense = system.getExpenses().get(expenseId);
     expect(expense).toBeDefined();
@@ -67,7 +68,7 @@ describe('startApproval', () => {
     expect(expense.getApprovalHistory()).toEqual(['SUBMITTED', 'PENDING_MANAGER']);
   });
 
-  it('Should throw error if expense does ont exist', () => {
+  it('Should throw error if expense does not exist', () => {
     const system = new System(1000, usersJsonPath);
     const submitterUid = 1;
     const expenseId = 'non-existent-id';
@@ -80,8 +81,7 @@ describe('startApproval', () => {
 describe('nextApprovers', () => {
   it('Should throw error if an expense has status `SUBMITTED`', () => {
     const system = new System(1000, usersJsonPath);
-    const submitterUid = 1;
-    const expenseId = system.createExpense(500, submitterUid); // new status: SUBMITTED
+    const expenseId = system.createExpense(500); // new status: SUBMITTED
     expect(() => system.nextApprovers(expenseId)).toThrow(
       'Error: no next approver found. Start the approval process first'
     );
@@ -91,7 +91,7 @@ describe('nextApprovers', () => {
     const system = new System(1000, usersJsonPath);
     const submitterUid = 1;
     const submitter = system.getEmployees().get(submitterUid);
-    const expenseId = system.createExpense(500, submitterUid); // new status: SUBMITTED
+    const expenseId = system.createExpense(500); // new status: SUBMITTED
     system.startApproval(expenseId, submitterUid); // new status: PENDING_MANAGER
     const nextApprovers = system.nextApprovers(expenseId);
     const manager = submitter.getManager();
@@ -104,7 +104,7 @@ describe('nextApprovers', () => {
     const submitterUid = 1;
     const employees = system.getEmployees();
     const submitter = employees.get(submitterUid);
-    const expenseId = system.createExpense(2000, submitterUid); // new status: SUBMITTED
+    const expenseId = system.createExpense(2000); // new status: SUBMITTED
     system.startApproval(expenseId, submitterUid); // new status: PENDING_MANAGER
     const manager = submitter.getManager();
     system.approve(expenseId, manager); // new status: PENDING_SENIOR_MANAGER
@@ -118,12 +118,12 @@ describe('nextApprovers', () => {
     const system = new System(1000, usersJsonPath);
     const submitterUid = 1;
     const submitter = system.getEmployees().get(submitterUid);
-    const expenseId = system.createExpense(500, submitterUid); // new status: SUBMITTED
+    const expenseId = system.createExpense(500); // new status: SUBMITTED
     system.startApproval(expenseId, submitterUid); // new status: PENDING_MANAGER
     const manager = submitter.getManager();
     system.approve(expenseId, manager); // new status: PENDING_FINANCE_EXPERT
     const nextApprovers = system.nextApprovers(expenseId);
-    const expectedApprovers = system.getFinanceExpertSIds();
+    const expectedApprovers = system.getFinanceExpertsIds();
     expect(nextApprovers).toEqual(expectedApprovers);
   });
 
@@ -131,7 +131,7 @@ describe('nextApprovers', () => {
     const system = new System(1000, usersJsonPath);
     const submitterUid = 1;
     const submitter = system.getEmployees().get(submitterUid);
-    const expenseId = system.createExpense(500, submitterUid); // new status: SUBMITTED
+    const expenseId = system.createExpense(500); // new status: SUBMITTED
     system.startApproval(expenseId, submitterUid); // new status: PENDING_MANAGER
     const manager = submitter.getManager();
     system.approve(expenseId, manager); // new status: PENDING_FINANCE_EXPERT
@@ -144,7 +144,7 @@ describe('nextApprovers', () => {
     const system = new System(1000, usersJsonPath);
     const submitterUid = 1;
     const submitter = system.getEmployees().get(submitterUid);
-    const expenseId = system.createExpense(500, submitterUid);
+    const expenseId = system.createExpense(500);
     system.startApproval(expenseId, submitterUid); // new status: PENDING_MANAGER
     const manager = submitter.getManager();
     system.reject(expenseId, manager); // new status: REJECTED_MANAGER
@@ -157,7 +157,7 @@ describe('nextApprovers', () => {
     const submitterUid = 1;
     const employees = system.getEmployees();
     const submitter = employees.get(submitterUid);
-    const expenseId = system.createExpense(2000, submitterUid);
+    const expenseId = system.createExpense(2000);
     system.startApproval(expenseId, submitterUid); // new status: PENDING_MANAGER
     const manager = submitter.getManager();
     system.approve(expenseId, manager); // new status: PENDING_SENIOR_MANAGER
@@ -171,7 +171,7 @@ describe('nextApprovers', () => {
     const system = new System(1000, usersJsonPath);
     const submitterUid = 1;
     const submitter = system.getEmployees().get(submitterUid);
-    const expenseId = system.createExpense(500, submitterUid);
+    const expenseId = system.createExpense(500);
     system.startApproval(expenseId, submitterUid); // new status: PENDING_MANAGER
     const manager = submitter.getManager();
     system.approve(expenseId, manager); // new status: PENDING_FINANCE_EXPERT
@@ -187,7 +187,7 @@ describe('approve', () => {
     const submitterUid = 1;
     const employees = system.getEmployees();
     const submitter = employees.get(submitterUid);
-    const expenseId = system.createExpense(500, submitterUid); // new status: SUBMITTED
+    const expenseId = system.createExpense(500); // new status: SUBMITTED
     system.startApproval(expenseId, submitterUid); // new status: PENDING_MANAGER
     const manager = submitter.getManager();
     system.approve(expenseId, manager); // new status: PENDING_FINANCE_EXPERT
@@ -213,7 +213,7 @@ describe('approve', () => {
   it('Should throw an error if approver is not in next approvers list', () => {
     const system = new System(1000, usersJsonPath);
     const submitterUid = 1;
-    const expenseId = system.createExpense(500, submitterUid); // new status: SUBMITTED
+    const expenseId = system.createExpense(500); // new status: SUBMITTED
     system.startApproval(expenseId, submitterUid); // new status: PENDING_MANAGER
     const nextApprovers = system.nextApprovers(expenseId);
     const notCorrectManagerUid = 6;
@@ -230,7 +230,7 @@ describe('reject', () => {
     const submitterUid = 1;
     const employees = system.getEmployees();
     const submitter = employees.get(submitterUid);
-    const expenseId = system.createExpense(500, submitterUid); // new status: SUBMITTED
+    const expenseId = system.createExpense(500); // new status: SUBMITTED
     system.startApproval(expenseId, submitterUid); // new status: PENDING_MANAGER
     const manager = submitter.getManager();
     system.reject(expenseId, manager); // new status: REJECTED_MANAGER
@@ -256,7 +256,7 @@ describe('reject', () => {
   it('Should throw an error if approver is not in next approvers list', () => {
     const system = new System(1000, usersJsonPath);
     const submitterUid = 1;
-    const expenseId = system.createExpense(500, submitterUid); // new status: SUBMITTED
+    const expenseId = system.createExpense(500); // new status: SUBMITTED
     system.startApproval(expenseId, submitterUid); // new status: PENDING_MANAGER
     const nextApprovers = system.nextApprovers(expenseId);
     const notCorrectManagerUid = 6;
@@ -281,8 +281,7 @@ describe('dumpflow', () => {
   });
 
   it('Should dump flow for submitted expense correctly', () => {
-    const submitterUid = 1;
-    const expenseId = system.createExpense(500, submitterUid);
+    const expenseId = system.createExpense(500);
     system.dumpFlow(expenseId);
     expect(consoleSpy).toHaveBeenCalledWith(
       `Approval: Flow history for expense ${expenseId}: SUBMITTED`
@@ -291,7 +290,7 @@ describe('dumpflow', () => {
 
   it('Should dump flow with full expense history (up to a stage) correctly', () => {
     const submitterUid = 1;
-    const expenseId = system.createExpense(500, submitterUid);
+    const expenseId = system.createExpense(500);
     const employees = system.getEmployees();
     system.startApproval(expenseId, submitterUid);
     const managerId = employees.get(submitterUid).getManager();
@@ -304,7 +303,7 @@ describe('dumpflow', () => {
 
   it('Should dump flow for rejected expense correctly', () => {
     const submitterUid = 1;
-    const expenseId = system.createExpense(500, submitterUid);
+    const expenseId = system.createExpense(500);
     const employees = system.getEmployees();
     system.startApproval(expenseId, submitterUid);
     const managerId = employees.get(submitterUid).getManager();
@@ -317,7 +316,7 @@ describe('dumpflow', () => {
 
   it('Should dump flow for approved expense correctly', () => {
     const submitterUid = 1;
-    const expenseId = system.createExpense(500, submitterUid);
+    const expenseId = system.createExpense(500);
     const employees = system.getEmployees();
     system.startApproval(expenseId, submitterUid);
     const managerId = employees.get(submitterUid).getManager();

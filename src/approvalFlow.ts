@@ -36,13 +36,13 @@ export class System {
       const employees = employeesData.map(
         (emp) => new Employee(emp.uid, emp.email, emp.manager, emp.financeExpert)
       );
-      system.setEmployees(new Map(employees.map((emp) => [emp.getUid(), emp])));
+      system.employees = new Map(employees.map((emp) => [emp.getUid(), emp]));
       console.debug(`System: Loaded ${employeesData.length} employees`);
 
       const financeExpertsIds = employees
         .filter((employee) => employee.getFinanceExpert())
         .map((emp) => emp.getUid());
-      system.setFinanceExpertsIds(financeExpertsIds);
+      system.financeExpertsIds = financeExpertsIds;
       console.debug(`System: Identified ${financeExpertsIds.length} finance experts`);
     } catch (error) {
       throw new Error('Error: input with employees is incorrect');
@@ -61,21 +61,12 @@ export class System {
     return this.employees;
   }
 
-  getFinanceExpertSIds() {
+  getFinanceExpertsIds() {
     return this.financeExpertsIds;
   }
 
-  private setEmployees(employees: Map<number, Employee>) {
-    this.employees = employees;
-  }
-
-  private setFinanceExpertsIds(financeExperts: number[]) {
-    this.financeExpertsIds = financeExperts;
-  }
-
   // Create a new expense
-  createExpense(amount: number, submitterUid: Employee['uid']): string {
-    this.validateSubmitter(submitterUid);
+  createExpense(amount: number): string {
     if (amount > 0) {
       const expense = new Expense(randomUUID(), amount, undefined, 'SUBMITTED', ['SUBMITTED']);
       this.expenses.set(expense.getId(), expense);
@@ -87,18 +78,19 @@ export class System {
 
   // Start the approval process
   startApproval(expenseId: string, submitterUid: number) {
+    console.debug(`Approval: Started for expense ${expenseId} by submitter ${submitterUid}`);
+    this.validateSubmitter(submitterUid);
     const expense = this.getExpense(expenseId);
     expense.setSubmitterUid(submitterUid);
     expense.setStatus('PENDING_MANAGER');
-    console.debug(`Approval: Started for expense ${expenseId} by submitter ${submitterUid}`);
   }
 
   // Get the next approvers for an expense
   nextApprovers(expenseId: string): number[] {
     const expense = this.getExpense(expenseId);
     const status = expense.getStatus();
-    const submitter = this.employees.get(expense.getSubmitterUid());
     console.debug(`Approval: Finding next approvers for expense ${expenseId} (status: ${status})`);
+    const submitter = this.employees.get(expense.getSubmitterUid());
     switch (status) {
       case 'APPROVED':
       case 'REJECTED_MANAGER':
@@ -122,32 +114,31 @@ export class System {
   }
 
   approve(expenseId: string, approverUid: number) {
-    const expense = this.getExpense(expenseId);
-    const nextApprovers = this.nextApprovers(expenseId);
-    if (nextApprovers.includes(approverUid)) {
-      const oldStatus = expense.getStatus();
-      const newStatus = StatusService.getNextApprovalStatus(expense, this.threshold);
-      expense.setStatus(newStatus);
-      console.debug(
-        `Approval: Expense ${expenseId} approved by ${approverUid} (${oldStatus} -> ${newStatus})`
-      );
-    } else {
-      throw new Error('Error: approver is not in authorised to approve this expense');
-    }
+    this.changeStatus(expenseId, approverUid, true);
   }
 
   reject(expenseId: string, approverUid: number) {
+    this.changeStatus(expenseId, approverUid, false);
+  }
+
+  private changeStatus(expenseId: string, approverUid: number, approve: boolean) {
     const expense = this.getExpense(expenseId);
+    const newStatus = approve
+      ? StatusService.getNextApprovalStatus(expense, this.threshold)
+      : StatusService.getNextRejectionStatus(expense);
     const nextApprovers = this.nextApprovers(expenseId);
     if (nextApprovers.includes(approverUid)) {
       const oldStatus = expense.getStatus();
-      const newStatus = StatusService.getNextRejectionStatus(expense);
       expense.setStatus(newStatus);
       console.debug(
-        `Approval: Expense ${expenseId} rejected by ${approverUid} (${oldStatus} -> ${newStatus})`
+        `Approval: Expense ${expenseId} ${
+          approve ? 'approved' : 'rejected'
+        } by ${approverUid} (${oldStatus} -> ${newStatus})`
       );
     } else {
-      throw new Error('Error: approver is not in authorised to reject this expense');
+      throw new Error(
+        `Error: approver is not in authorised to ${approve ? 'approve' : 'reject'} this expense`
+      );
     }
   }
 
