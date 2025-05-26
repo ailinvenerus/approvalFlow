@@ -73,11 +73,11 @@ import { System } from './approvalFlow.js';
 // Initialise system with threshold and users data
 const system = new System(1000, '../src/input/users.json');
 
-// Create and submit an expense
-const submitterUid = 1;
-const expenseId = system.createExpense(500, submitterUid);
+// Create an expense
+const expenseId = system.createExpense(500);
 
 // Start approval process
+const submitterUid = 1;
 system.startApproval(expenseId, submitterUid);
 
 // Get next approvers
@@ -88,7 +88,7 @@ const managerId = system.getEmployees().get(submitterUid).getManager();
 system.approve(expenseId, managerId);
 
 // Reject expense by finance expert
-const financeExpertId = system.getFinanceExpertSIds()[0];
+const financeExpertId = system.getFinanceExpertsIds()[0];
 system.reject(expenseId, financeExpertId);
 
 // Check approval flow
